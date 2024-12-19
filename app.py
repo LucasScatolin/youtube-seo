@@ -1,5 +1,5 @@
 import streamlit as st
-import openai
+from openai import OpenAI
 import os
 import re
 from pydub import AudioSegment
@@ -11,14 +11,14 @@ import yt_dlp
 # Load environment variables
 load_dotenv()
 
-# Check if API key is set
-api_key = os.getenv('OPENAI_API_KEY')
+# Get API key from Streamlit secrets or environment variables
+api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv('OPENAI_API_KEY')
 if not api_key:
-    st.error('⚠️ OpenAI API key not found. Please set it in your .env file.')
+    st.error('⚠️ OpenAI API key not found. Please set it in your .env file or Streamlit secrets.')
     st.stop()
 
-# Initialize OpenAI client with the API key
-client = openai.OpenAI(api_key=api_key)
+# Initialize OpenAI client
+client = OpenAI(api_key=api_key)
 
 def sanitize_filename(filename):
     # Remove any characters that aren't alphanumeric, space, or hyphen
@@ -49,17 +49,14 @@ def download_youtube_audio(youtube_url):
 
         # Download the video
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Get video info first
             info = ydl.extract_info(youtube_url, download=False)
-            video_title = info['title']
+            video_title = info.get('title', '')
             st.write(f"Título do vídeo: {video_title}")
-            st.write(f"Duração: {info['duration']} segundos")
+            st.write(f"Duração: {info.get('duration', 0)} segundos")
             
-            # Download the video
             st.write("Baixando áudio...")
             ydl.download([youtube_url])
         
-        # The file will be saved with .wav extension
         output_path = output_template + '.wav'
         st.write("Download concluído!")
         
@@ -158,10 +155,8 @@ def write_full_article(transcript, outline):
         )
         article = response.choices[0].message.content
         
-        # Count words in the article
         word_count = len(article.split())
         
-        # If article is too short, request an expansion
         if word_count < 600:
             st.write("Expandindo artigo para atingir o mínimo de 600 palavras...")
             expansion_response = client.chat.completions.create(
